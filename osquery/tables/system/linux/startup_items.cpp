@@ -9,6 +9,10 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
+#include <string.h>
+
+#include <systemd/sd-bus.h>
+
 #include <osquery/core.h>
 #include <osquery/filesystem/filesystem.h>
 #include <osquery/logger.h>
@@ -84,6 +88,51 @@ void genAutoStartScripts(const std::string& sysdir, QueryData& results) {
   }
 }
 
+void genSystemDItems(QueryData& results) {
+        sd_bus_message *reply = NULL;
+        sd_bus_message *m = NULL;
+        sd_bus *bus;
+        char *state = NULL;
+        char *path = NULL;
+	sd_bus_error error = SD_BUS_ERROR_NULL;
+	int r = 0;
+
+        int s = sd_bus_open_system(&bus);
+        if (s < 0) {
+                return;
+        }
+
+        s = sd_bus_message_new_method_call(bus,
+                                     &m,
+                                     "org.freedesktop.systemd1",
+                                     "/org/freedesktop/systemd1",
+                                     "org.freedesktop.systemd1.Manager",
+                                     "ListUnitFiles");
+        if (s < 0) {
+                VLOG(1) << "Bus error " << strerror(r);
+                return;
+        }
+        s = sd_bus_call(bus, m, 0, &error, &reply);
+        if (s < 0) {
+                VLOG(1) << "Bus error " << strerror(r);
+                return;
+        }
+        while ((s = sd_bus_message_read(reply, "(ss)", &path, &state)) > 0) {
+                Row r;
+                // name
+                // path
+                r["type"] = "Startup Item";
+                r["status"] = std::string(state); //possibly change
+                r["source"] = std::string(path);
+                results.push_back(r);
+        }
+        s = sd_bus_message_exit_container(reply);
+        if (s < 0) {
+                VLOG(1) << "Bus error " << strerror(r);
+                return;
+        }
+}
+
 QueryData genStartupItems(QueryContext& context) {
   QueryData results;
 
@@ -102,6 +151,7 @@ QueryData genStartupItems(QueryContext& context) {
   for (const auto& dir : systemItemPaths) {
     genAutoStartItems(dir, results);
   }
+  genSystemDItems(results);
 
   return results;
 }

@@ -256,6 +256,7 @@ function(generateOsqueryTablesSystemSystemtable)
       thirdparty_libcryptsetup
       thirdparty_librpm
       thirdparty_popt
+      thirdparty_systemd
     )
 
   elseif(DEFINED PLATFORM_MACOS)
