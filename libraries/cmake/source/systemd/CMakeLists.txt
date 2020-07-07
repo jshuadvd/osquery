@@ -15,7 +15,7 @@ function(systemDMain)
   	)
 	
 	target_link_libraries(thirdparty_systemd INTERFACE
-    		c_settings
+    		thirdparty_c_settings
   	)
 
 endfunction()
