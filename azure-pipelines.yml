@@ -1,5 +1,24 @@
+# git push conditions that trigger a CI build to run
 trigger:
-- master
+  branches:
+    include: 
+    - master
+  paths:
+    exclude:
+    - docs/*
+    - packs/*
+    - README.md
+    - CHANGELOG.md
+
+# GitHub pull request conditions that trigger a CI build to run
+# note: draft PRs never trigger a pipeline.
+pr:
+  paths:
+    exclude:
+    - docs/*
+    - packs/*
+    - README.md
+    - CHANGELOG.md
 
 jobs:
 
