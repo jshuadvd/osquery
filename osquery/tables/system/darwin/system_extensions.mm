@@ -48,6 +48,62 @@ void getExtensionRow(const pt::ptree& extension, Row& r) {
   const auto category = extension.get_child("categories");
   r["category"] = getExtensionCategory(category);
   r["bundle_path"] = extension.get("container.bundlePath", "");
+  r["is_managed"] = INTEGER(0);
+}
+
+// com.apple.system-extension-policy payload defines the policy for
+// the system extensions. The function looks for team identifier or
+// extension bundle identifiers in the allowed list.
+// https://developer.apple.com/documentation/devicemanagement/systemextensions?language=objc
+void setPolicyFlag(const pt::ptree& ptree, Row& r) {
+  const auto& policies_attr_opt = ptree.get_child_optional("extensionPolicies");
+  if (!policies_attr_opt.has_value()) {
+    return;
+  }
+
+  const auto& policies_attr = policies_attr_opt.value();
+  const auto row_teamid = r["team"];
+  const auto row_identifier = r["identifier"];
+
+  for (const auto& policy : policies_attr) {
+    // Get the list of AllowedTeamIdentifiers that are valid and system
+    // extensions signed by them are allowed to load.
+    //
+    // All system extensions signed with any of the specified team identifiers
+    // will be considered to be approved
+    const auto& policy_item = policy.second;
+    const auto& allowed_team_opt =
+        policy_item.get_child_optional("allowedTeamIDs");
+    if (allowed_team_opt.has_value()) {
+      const auto& allowed_team = allowed_team_opt.value();
+      for (const auto& team : allowed_team) {
+        const auto teamid = team.second.get("", "");
+        if (teamid == row_teamid) {
+          r["is_managed"] = INTEGER(1);
+          break;
+        }
+      }
+    }
+
+    // get the list of system extensions that will always be approved
+    const auto& allowed_extensions_opt =
+        policy_item.get_child_optional("allowedExtensions");
+    if (allowed_extensions_opt.has_value()) {
+      const auto& allowed_extensions = allowed_extensions_opt.value();
+      const auto& extensions_opt =
+          allowed_extensions.get_child_optional(row_teamid);
+      if (extensions_opt.has_value()) {
+        const auto& extensions = extensions_opt.value();
+        for (const auto& extension : extensions) {
+          auto identifier = extension.second.get("", "");
+          if (identifier == row_identifier) {
+            r["is_managed"] = INTEGER(1);
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 QueryData genExtensionsFromPtree(const pt::ptree& ptree) {
@@ -62,24 +118,30 @@ QueryData genExtensionsFromPtree(const pt::ptree& ptree) {
     const auto& extension_value = array_entry.second;
     Row r;
     getExtensionRow(extension_value, r);
+    setPolicyFlag(ptree, r);
     results.push_back(r);
   }
   return results;
 }
 
 QueryData genSystemExtensions(QueryContext& context) {
-  if (!osquery::pathExists(kSysExtDBPath)) {
-    VLOG(1) << "System extension database does not exist: " << kSysExtDBPath;
+  if (@available(macOS 10.15, *)) {
+    if (!osquery::pathExists(kSysExtDBPath)) {
+      VLOG(1) << "System extension database does not exist: " << kSysExtDBPath;
+      return {};
+    }
+
+    pt::ptree ptree;
+    if (!osquery::parsePlist(kSysExtDBPath, ptree).ok()) {
+      LOG(ERROR) << "Failed to parse: " << kSysExtDBPath;
+      return {};
+    }
+
+    return genExtensionsFromPtree(ptree);
+  } else {
+    VLOG(1) << "System Extension is not supported (require macOS (>= 10.15))";
     return {};
   }
-
-  pt::ptree ptree;
-  if (!osquery::parsePlist(kSysExtDBPath, ptree).ok()) {
-    LOG(ERROR) << "Failed to parse: " << kSysExtDBPath;
-    return {};
-  }
-
-  return genExtensionsFromPtree(ptree);
 }
 }
 }
