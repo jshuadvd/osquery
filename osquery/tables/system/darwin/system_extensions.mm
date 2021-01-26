@@ -55,7 +55,7 @@ void getExtensionRow(const pt::ptree& extension, Row& r) {
 // the system extensions. The function looks for team identifier or
 // extension bundle identifiers in the allowed list.
 // https://developer.apple.com/documentation/devicemanagement/systemextensions?language=objc
-void setPolicyFlag(const pt::ptree& ptree, Row& r) {
+void getPolicyFlag(const pt::ptree& ptree, Row& r) {
   const auto& policies_attr_opt = ptree.get_child_optional("extensionPolicies");
   if (!policies_attr_opt.has_value()) {
     return;
@@ -118,7 +118,7 @@ QueryData genExtensionsFromPtree(const pt::ptree& ptree) {
     const auto& extension_value = array_entry.second;
     Row r;
     getExtensionRow(extension_value, r);
-    setPolicyFlag(ptree, r);
+    getPolicyFlag(ptree, r);
     results.push_back(r);
   }
   return results;
@@ -139,7 +139,8 @@ QueryData genSystemExtensions(QueryContext& context) {
 
     return genExtensionsFromPtree(ptree);
   } else {
-    VLOG(1) << "System Extension is not supported (require macOS (>= 10.15))";
+    VLOG(1)
+        << "System Extensions are not supported (requires macOS (>= 10.15))";
     return {};
   }
 }
